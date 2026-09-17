@@ -36,14 +36,21 @@ def convert_to_ssh(repository_url: str) -> str:
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
         raise ValueError("Repository URL must be a valid HTTP(S) URL")
 
+    host = parsed_url.hostname
+    if not host:
+        raise ValueError("Repository URL does not include a hostname")
+    if host.startswith("www."):
+        host = host.removeprefix("www.")
+
     repository_path = parsed_url.path.strip("/")
+    repository_path = repository_path.split("/-/", maxsplit=1)[0]
     if not repository_path:
         raise ValueError("Repository URL does not include a repository path")
 
     if not repository_path.endswith(".git"):
         repository_path = f"{repository_path}.git"
 
-    return f"git@{parsed_url.netloc}:{repository_path}"
+    return f"git@{host}:{repository_path}"
 
 
 def clone_repo(ssh_url: str, destination: Path) -> None:
@@ -54,6 +61,11 @@ def clone_repo(ssh_url: str, destination: Path) -> None:
         capture_output=True,
         text=True,
     )
+
+
+def is_cloned_repository(destination: Path) -> bool:
+    """Return whether *destination* is a completed non-bare Git clone."""
+    return destination.is_dir() and (destination / ".git").is_dir()
 
 
 def main() -> None:
@@ -92,9 +104,13 @@ def main() -> None:
                 raise ValueError("Email is missing")
             if not repository_url or repository_url.lower() == "nan":
                 raise ValueError("Git Repository URL is missing")
-            if destination.exists():
-                logging.info("Skipping %s; %s already exists", netid, destination)
+            if is_cloned_repository(destination):
+                logging.info("Skipping %s; repository already cloned", netid)
                 continue
+            if destination.exists():
+                raise FileExistsError(
+                    f"Destination exists but is not a completed Git clone: {destination}"
+                )
 
             ssh_url = convert_to_ssh(repository_url)
             clone_repo(ssh_url, destination)
