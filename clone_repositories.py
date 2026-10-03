@@ -12,16 +12,30 @@ from urllib.parse import urlparse
 import pandas as pd
 
 
-REQUIRED_COLUMNS = {"Email", "Git Repository URL"}
+REQUIRED_COLUMNS = {"Email"}
+URL_COLUMN_KEYWORD = "URL"
 
 
 def load_excel(excel_path: Path) -> pd.DataFrame:
-    """Read the registration workbook and verify its required columns."""
+    """Read the registration workbook and normalize its repository URL column."""
     dataframe = pd.read_excel(excel_path)
     missing_columns = REQUIRED_COLUMNS - set(dataframe.columns)
     if missing_columns:
         missing = ", ".join(sorted(missing_columns))
         raise ValueError(f"Workbook is missing required column(s): {missing}")
+
+    url_columns = [
+        column
+        for column in dataframe.columns
+        if URL_COLUMN_KEYWORD in str(column).upper()
+    ]
+    if len(url_columns) != 1:
+        raise ValueError(
+            "Workbook must contain exactly one column with 'URL' in its name; "
+            f"found {len(url_columns)}"
+        )
+
+    dataframe = dataframe.rename(columns={url_columns[0]: "Git Repository URL"})
     return dataframe
 
 
